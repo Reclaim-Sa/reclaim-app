@@ -9,3 +9,16 @@
 .st-live-buttons>button.st-primary:last-child{background:#1c477f;color:#fff;border:1px solid #1c477f;font-weight:750;min-width:190px;cursor:pointer}
 .st-live-buttons>button.st-primary:last-child:hover{background:#14335d}
 .st-live-buttons>button.st-primary:last-child:disabled{opacity:.5;cursor:not-allowed}
+
+/* Stock scanning: consistent, accessible action buttons */
+.st-scan-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.st-scan-actions>button,.st-live-buttons>button.st-scan-clear:last-child{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:46px;padding:12px 18px;border-radius:10px;font-size:14px;font-weight:750;line-height:1.2;cursor:pointer;transition:background-color .15s,border-color .15s,box-shadow .15s}
+.st-scan-actions>button.st-scan-check{background:#1c477f;color:#fff;border:1px solid #1c477f}
+.st-scan-actions>button.st-scan-check:hover:not(:disabled){background:#14335d}
+.st-scan-actions>button.st-scan-camera{background:#eaf2ff;color:#194e8b;border:1px solid #c8dcf5}
+.st-scan-actions>button.st-scan-camera:hover{background:#d9eaff;border-color:#a6c6ed}
+.st-scan-actions>button.st-scan-clear,.st-live-buttons>button.st-scan-clear:last-child{background:#fff;color:#526780;border:1px solid #dce5ef}
+.st-scan-actions>button.st-scan-clear:hover{background:#f3f6fa}
+.st-scan-actions>button:focus-visible{outline:3px solid #7db6fa;outline-offset:3px}
+.st-scan-actions>button:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:520px){.st-scan-actions>button.st-scan-check,.st-scan-actions>button.st-scan-camera{flex:1 1 100%}.st-scan-actions>button.st-scan-clear{flex:1}}
