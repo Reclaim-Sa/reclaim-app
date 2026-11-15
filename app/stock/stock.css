@@ -4,3 +4,8 @@
 
 .st-delete{color:#b33440!important}.st-modal-overlay{position:fixed;inset:0;background:#10233a99;z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}.st-delete-dialog{background:white;max-width:440px;width:100%;border-radius:14px;padding:28px;box-shadow:0 20px 70px #10233a40}.st-delete-dialog h2{margin:0 0 12px}.st-delete-dialog p{line-height:1.6;color:#5a6d83}.st-delete-dialog>div{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}.st-delete-dialog button{border:1px solid #d6e0eb;border-radius:8px;padding:12px;cursor:pointer}.st-danger{background:#ae303d;color:white;border-color:#ae303d!important}.st-danger:disabled{opacity:.5}
 .st-live-form select{border:1px solid #dce5ef;border-radius:8px;padding:12px;width:100%;background:#fff;color:#243b58;font:inherit}.st-wide{grid-column:1/-1}.st-movement-link{display:inline-block;margin:10px 0;color:#2369b2;font-size:14px;font-weight:700;text-decoration:none}.st-movement-link:hover{text-decoration:underline}@media(max-width:720px){.st-wide{grid-column:auto}}
+
+/* Keep the single submit button visible in receiving/issuing forms. */
+.st-live-buttons>button.st-primary:last-child{background:#1c477f;color:#fff;border:1px solid #1c477f;font-weight:750;min-width:190px;cursor:pointer}
+.st-live-buttons>button.st-primary:last-child:hover{background:#14335d}
+.st-live-buttons>button.st-primary:last-child:disabled{opacity:.5;cursor:not-allowed}
