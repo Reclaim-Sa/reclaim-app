@@ -49,6 +49,7 @@ create table if not exists public.stock_items (
  updated_at timestamptz not null default now(),
  unique(organisation_id,sku)
 );
+create unique index if not exists stock_items_org_id_idx on public.stock_items(organisation_id,id);
 create table if not exists public.stock_requests (
  id uuid primary key default gen_random_uuid(),
  organisation_id uuid not null references public.organisations(id) on delete cascade,
@@ -62,9 +63,6 @@ create table if not exists public.stock_requests (
  constraint stock_request_org_fk foreign key(organisation_id,stock_item_id)
  references public.stock_items(organisation_id,id)
 );
-create unique index if not exists stock_items_org_id_idx on public.stock_items(organisation_id,id);
--- Additional unique constraint required for the composite foreign key.
-alter table public.stock_items add constraint stock_items_org_id_unique unique(organisation_id,id);
 create table if not exists public.courier_issues (
  id uuid primary key default gen_random_uuid(),
  organisation_id uuid not null references public.organisations(id) on delete cascade,
