@@ -1,5 +1,5 @@
-import "./dashboard.css";
 "use client";
+import "./dashboard.css";
 import {useMemo,useState} from "react";
 import {LayoutDashboard,Package,Truck,ClipboardList,Bell,Plus,Search,CheckCircle2,AlertTriangle,ArrowLeft,Menu,X} from "lucide-react";
 const seed=[
