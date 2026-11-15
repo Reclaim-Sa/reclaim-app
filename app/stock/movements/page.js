@@ -1,7 +1,7 @@
 "use client";
 import {useEffect,useState} from "react";
 import Link from "next/link";
-import {getSupabase} from "../../lib/supabase";
+import {getSupabase} from "../../../lib/supabase";
 import {ArrowLeft,Package,ArrowDownToLine,ArrowUpFromLine,History} from "lucide-react";
 import "../stock.css";
 export default function Movements(){
