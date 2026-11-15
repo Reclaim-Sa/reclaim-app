@@ -1,3 +1,4 @@
+import "./dashboard.css";
 "use client";
 import {useMemo,useState} from "react";
 import {LayoutDashboard,Package,Truck,ClipboardList,Bell,Plus,Search,CheckCircle2,AlertTriangle,ArrowLeft,Menu,X} from "lucide-react";
