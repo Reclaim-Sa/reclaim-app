@@ -1,7 +1,8 @@
 "use client";
 import "./dashboard.css";
 import Link from "next/link";
-import {useMemo,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
+import {getSupabase} from "../../lib/supabase";
 import {LayoutDashboard,Package,Truck,ClipboardList,Bell,Plus,Search,CheckCircle2,AlertTriangle,ArrowLeft,Menu,X} from "lucide-react";
 const seed=[
 {id:1,type:"Stock",title:"Medium examination gloves",detail:"Only 8 boxes remaining",owner:"Purchasing",status:"Needs attention",priority:"High",amount:0},
@@ -14,29 +15,74 @@ const problems=["General","Incorrect supplier delivery","Missing invoice","Credi
 const suggestedCategory={"Incorrect supplier delivery":"Courier","Courier issue":"Courier","Low stock":"Stock","Missing invoice":"Task","Credit note outstanding":"Task"};
 const emptyForm={type:"Task",problem:"General",title:"",detail:"",owner:"",assignee:"",priority:"Medium",amount:"",supplier:"",reference:"",expected:"",received:"",dueDate:""};
 export default function Dashboard(){
+const [workspaces,setWorkspaces]=useState([]),[workspaceId,setWorkspaceId]=useState(""),[accountStatus,setAccountStatus]=useState("Checking sign-in…");
+const activeUserId=useRef(null);
+useEffect(()=>{
+ let active=true;
+ let requestId=0;
+ let subscription;
+ const clearWorkspace=()=>{setWorkspaces([]);setWorkspaceId("");};
+ try{
+  const db=getSupabase();
+  async function load(){
+   const currentRequest=++requestId;
+   const {data:{user}={},error:authError}=await db.auth.getUser();
+   if(!active||currentRequest!==requestId)return;
+   if(authError||!user){
+    activeUserId.current=null;
+    clearWorkspace();
+    setAccountStatus("Sign in to choose your business workspace.");
+    return;
+   }
+   if(activeUserId.current!==user.id){
+    activeUserId.current=user.id;
+    clearWorkspace();
+   }
+   setAccountStatus("Loading business workspaces…");
+   const {data,error}=await db.from("memberships")
+    .select("organisation_id,role,organisations(name)")
+    .eq("user_id",user.id);
+   if(!active||currentRequest!==requestId||activeUserId.current!==user.id)return;
+   if(error){
+    clearWorkspace();
+    setAccountStatus("Could not load workspaces: "+error.message);
+    return;
+   }
+   const allowed=data||[];
+   setWorkspaces(allowed);
+   setWorkspaceId(old=>allowed.some(w=>w.organisation_id===old)?old:allowed.length===1?allowed[0].organisation_id:"");
+   setAccountStatus(allowed.length?"Workspace access verified. Live records are not enabled yet.":"No business workspace found.");
+  }
+  const refresh=()=>load().catch(e=>{if(active){clearWorkspace();setAccountStatus("Could not load workspaces: "+e.message);}});
+  refresh();
+  const listener=db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_OUT"||event==="SIGNED_IN"||event==="USER_UPDATED"){if(event==="SIGNED_OUT"){activeUserId.current=null;clearWorkspace();}queueMicrotask(refresh);}});
+  subscription=listener.data.subscription;
+ }catch(e){clearWorkspace();setAccountStatus(e.message);}
+ return()=>{active=false;requestId++;subscription?.unsubscribe();};
+},[]);
 const [items,setItems]=useState(seed),[filter,setFilter]=useState("All"),[query,setQuery]=useState(""),[modal,setModal]=useState(false),[mobile,setMobile]=useState(false),[form,setForm]=useState(emptyForm);
 const shown=useMemo(()=>items.filter(i=>(filter==="All"||i.type===filter)&&[i.title,i.detail,i.owner,i.assignee].join(" ").toLowerCase().includes(query.toLowerCase())),[items,filter,query]);
 const count=(fn)=>items.filter(fn).length;
 const recovered=items.reduce((sum,i)=>sum+(Number(i.recovered)||0),0);
 const atRisk=items.filter(i=>i.status!=="Resolved").reduce((sum,i)=>sum+Math.max(0,(Number(i.amount)||0)-(Number(i.recovered)||0)),0);
-const money=n=>new Intl.NumberFormat("en-ZA",{style:"currency",currency:"ZAR",maximumFractionDigits:0}).format(n);
-function add(e){e.preventDefault();if(!form.title.trim()||!Number.isFinite(Number(form.amount))||Number(form.amount)<0)return;setItems(p=>[{...form,id:Date.now(),status:"Open",amount:Number(form.amount)||0,title:form.title.trim()},...p]);setModal(false);setForm(emptyForm);setFilter("All");}
-function done(id){setItems(p=>p.map(i=>i.id===id?{...i,status:i.status==="Resolved"?"Open":"Resolved"}:i));}
+const money=n=>new Intl.NumberFormat("en-ZA",{style:"currency",currency:"ZAR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+function add(e){e.preventDefault();if(!form.title.trim()||!Number.isFinite(Number(form.amount))||Number(form.amount)<0)return;setItems(p=>[{...form,id:Date.now(),status:"Open",amount:Math.round((Number(form.amount)||0)*100)/100,title:form.title.trim()},...p]);setModal(false);setForm(emptyForm);setFilter("All");}
+// Issue resolution is independent of confirmed cash recovery.\nfunction done(id){setItems(p=>p.map(i=>i.id===id?{...i,status:i.status==="Resolved"?"Open":"Resolved"}:i));}
 function confirmRecovery(id){
 const item=items.find(i=>i.id===id);
 if(!item||item.status==="Resolved")return;
 const outstanding=Math.max(0,(Number(item.amount)||0)-(Number(item.recovered)||0));
 if(outstanding<=0)return;
-const raw=window.prompt("Additional confirmed credit or refund received (R). Remaining: "+money(outstanding),String(outstanding));
+const raw=window.prompt("Additional confirmed credit or refund received (R). Remaining: "+money(outstanding),outstanding.toFixed(2));
 if(raw===null)return;
-const amount=Number(raw);
-if(!raw.trim()||!Number.isFinite(amount)||amount<=0||amount>outstanding){window.alert("Enter a positive amount no greater than the outstanding balance.");return;}
-setItems(p=>p.map(i=>i.id===id?{...i,recovered:(Number(i.recovered)||0)+amount,status:amount>=outstanding?"Resolved":"In progress"}:i));
+const amount=Math.round(Number(raw)*100)/100;
+if(!raw.trim()||!Number.isFinite(amount)||amount<=0||amount>outstanding+0.000001){window.alert("Enter a positive amount no greater than the outstanding balance.");return;}
+setItems(p=>p.map(i=>i.id===id?{...i,recovered:Math.round(((Number(i.recovered)||0)+amount)*100)/100,status:amount>=outstanding-0.000001?"Resolved":"In progress"}:i));
 }
 return <div className="rc-shell">
 <aside className={"rc-sidebar "+(mobile?"rc-show":"")}><div className="rc-brand">◈ <span>RECLAIM</span><button className="rc-mobile-close" onClick={()=>setMobile(false)} aria-label="Close menu"><X size={20}/></button></div><p className="rc-side-label">WORKSPACE</p><button className="rc-nav rc-active" onClick={()=>{setFilter("All");setMobile(false)}}><LayoutDashboard size={19}/> Overview</button><Link className="rc-nav" href="/stock"><Package size={19}/> Stock management</Link><Link className="rc-nav" href="/couriers"><Truck size={19}/> Courier issues</Link><Link className="rc-nav" href="/tasks"><ClipboardList size={19}/> Team tasks</Link><div className="rc-side-bottom"><div className="rc-demo-note">DEMO WORKSPACE<br/><small>Changes reset when you refresh.</small></div><a href="/"><ArrowLeft size={16}/> Back to website</a></div></aside>
 <main className="rc-main"><header className="rc-top"><button className="rc-menu" onClick={()=>setMobile(true)} aria-label="Open menu"><Menu size={23}/></button><div className="rc-breadcrumb">Workspace <span>/</span> Dashboard</div><div className="rc-top-right"><span className="rc-demo-pill">Preview mode</span><Bell size={20}/><span className="rc-avatar">R</span></div></header>
-<div className="rc-content"><div className="rc-intro"><div><p className="rc-eyebrow">YOUR OPERATIONS AT A GLANCE</p><h1>Good morning, team <span>👋</span></h1><p>Stay on top of what needs attention today.</p></div><button className="rc-primary" onClick={()=>setModal(true)}><Plus size={18}/> New item</button></div>
+<div className="rc-content"><div role="region" aria-label="Business workspace selection" style={{background:"#fff",border:"1px solid #dce4ef",borderRadius:12,padding:"12px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}><label htmlFor="rc-workspace" style={{fontWeight:700}}>Business workspace</label><select id="rc-workspace" aria-label="Business workspace" value={workspaceId} onChange={e=>setWorkspaceId(e.target.value)} style={{padding:"9px 12px",border:"1px solid #cbd5e1",borderRadius:8,maxWidth:"100%"}}><option value="">Select workspace</option>{workspaces.map(w=><option key={w.organisation_id} value={w.organisation_id}>{w.organisations?.name||"Business workspace"} ({w.role})</option>)}</select><small style={{color:"#64748b"}}>{accountStatus} Demo data remains separate.</small><Link href="/account" style={{color:"#1d4e89",fontWeight:600}}>Manage account</Link></div><div className="rc-intro"><div><p className="rc-eyebrow">YOUR OPERATIONS AT A GLANCE</p><h1>Good morning, team <span>👋</span></h1><p>Stay on top of what needs attention today.</p></div><button className="rc-primary" onClick={()=>setModal(true)}><Plus size={18}/> New item</button></div>
 <div className="rc-stats"><div className="rc-stat"><div className="rc-stat-top"><span>Estimated value at risk</span><span className="rc-icon rc-blue"><ClipboardList size={20}/></span></div><strong className="rc-money">{money(atRisk)}</strong><small>Demo estimates · unresolved items</small></div><div className="rc-stat"><div className="rc-stat-top"><span>Needs attention</span><span className="rc-icon rc-orange"><AlertTriangle size={20}/></span></div><strong>{count(i=>i.status!=="Resolved"&&i.priority==="High")}</strong><small>High priority items</small></div><div className="rc-stat"><div className="rc-stat-top"><span>Open items</span><span className="rc-icon rc-purple"><Truck size={20}/></span></div><strong>{count(i=>i.status!=="Resolved")}</strong><small>Awaiting action</small></div><div className="rc-stat"><div className="rc-stat-top"><span>Confirmed recovered</span><span className="rc-icon rc-green"><CheckCircle2 size={20}/></span></div><strong className="rc-money">{money(recovered)}</strong><small>Demo credits / refunds confirmed</small></div></div>
 <section className="rc-panel"><div className="rc-panel-heading"><div><h2>Operations tracker</h2><p>Everything your team needs to follow up on, in one place.</p></div><div className="rc-search"><Search size={17}/><input aria-label="Search items" placeholder="Search items..." value={query} onChange={e=>setQuery(e.target.value)}/></div></div><div className="rc-tabs">{kinds.map(k=><button key={k} className={filter===k?"rc-tab-selected":""} onClick={()=>setFilter(k)}>{k==="All"?"All items":k==="Task"?"Tasks":k}</button>)}</div><div className="rc-list">{shown.length?shown.map(item=><article className="rc-item" key={item.id}><div className={"rc-item-icon "+(item.type==="Stock"?"rc-blue":item.type==="Courier"?"rc-purple":"rc-orange")}>{item.type==="Stock"?<Package size={20}/>:item.type==="Courier"?<Truck size={20}/>:<ClipboardList size={20}/>}</div><div className="rc-item-main"><div className="rc-item-title">{item.title}<span className={"rc-priority "+item.priority.toLowerCase()}>{item.priority}</span></div><p>{item.detail||"No additional details"}{item.problem&&item.problem!=="General"?" · "+item.problem:""}</p><small>{item.type} · Department: {item.owner||"Unassigned"} · Responsible: {item.assignee||"Not assigned"}{Number(item.recovered)>0?" · Recovered: "+money(Number(item.recovered)):""}{item.status!=="Resolved"&&Number(item.amount)>Number(item.recovered||0)?" · At risk: "+money(Number(item.amount)-Number(item.recovered||0)):""}{item.dueDate?" · Follow up: "+item.dueDate:""}{item.status!=="Resolved"&&item.dueDate&&item.dueDate<new Date().toLocaleDateString("en-CA")?" · OVERDUE":""}</small></div><div className="rc-item-actions"><span className={"rc-status "+(item.status==="Resolved"?"resolved":"")}>{item.status}</span>{item.status!=="Resolved"&&Number(item.amount)>Number(item.recovered||0)&&<button onClick={()=>confirmRecovery(item.id)}>Record recovery</button>}<button onClick={()=>done(item.id)}>{item.status==="Resolved"?"Reopen":"Resolve"}</button></div></article>):<div className="rc-empty">No items found. Try another filter or add a new item.</div>}</div></section><p className="rc-disclaimer">This is an interactive demonstration. At-risk values are estimates. Recovered values are user-entered demo confirmations, not independently verified receipts. Data is stored only in this page session, not in a database. Do not enter sensitive or real customer information.</p></div></main>
 {modal&&<div className="rc-overlay" onClick={()=>setModal(false)}><div className="rc-dialog" role="dialog" aria-modal="true" aria-label="Create new item" onClick={e=>e.stopPropagation()}><div className="rc-dialog-head"><h2>Create new item</h2><button onClick={()=>setModal(false)} aria-label="Close"><X size={20}/></button></div><form onSubmit={add}><label>Category<select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option>Stock</option><option>Courier</option><option>Task</option></select></label><label>Issue type<select value={form.problem} onChange={e=>setForm({...form,problem:e.target.value,type:suggestedCategory[e.target.value]||form.type})}>{problems.map(p=><option key={p}>{p}</option>)}</select></label><label>Title<input required maxLength={100} value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="What needs attention?"/></label><label>Details (optional)<textarea rows={2} maxLength={500} value={form.detail} onChange={e=>setForm({...form,detail:e.target.value})} placeholder="Add a short description"/></label>{form.problem!=="General"&&form.problem!=="Low stock"&&<div className="rc-smart-fields"><p>Additional issue details</p><label>Supplier / courier<input maxLength={100} value={form.supplier} onChange={e=>setForm({...form,supplier:e.target.value})} placeholder="Supplier name"/></label><label>Order / invoice / delivery reference<input maxLength={100} value={form.reference} onChange={e=>setForm({...form,reference:e.target.value})} placeholder="Reference number"/></label>{form.problem==="Incorrect supplier delivery"&&<><label>Expected items / quantities<input maxLength={180} value={form.expected} onChange={e=>setForm({...form,expected:e.target.value})} placeholder="e.g. 30 L and 20 M"/></label><label>Received items / quantities<input maxLength={180} value={form.received} onChange={e=>setForm({...form,received:e.target.value})} placeholder="e.g. 50 L"/></label></>}</div>}<label>Responsible employee (demo)<input maxLength={80} value={form.assignee} onChange={e=>setForm({...form,assignee:e.target.value})} placeholder="Employee name (optional for demo)"/></label><div className="rc-form-row"><label>Assigned department<input maxLength={60} value={form.owner} onChange={e=>setForm({...form,owner:e.target.value})} placeholder="e.g. Receiving"/></label><label>Follow-up date<input type="date" value={form.dueDate} onChange={e=>setForm({...form,dueDate:e.target.value})}/></label></div><div className="rc-form-row"><label>Estimated value at risk (R)<input type="number" min="0" step="0.01" value={form.amount} onChange={e=>setForm({...form,amount:e.target.value})} placeholder="0.00"/></label><label>Priority<select value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}><option>Low</option><option>Medium</option><option>High</option></select></label></div><button className="rc-primary rc-submit" type="submit"><Plus size={18}/> Add item</button></form></div></div>}</div>;
