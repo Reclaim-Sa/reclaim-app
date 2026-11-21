@@ -1,7 +1,7 @@
 "use client";
 import "./dashboard.css";
 import Link from "next/link";
-import {useEffect,useMemo,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 import {getSupabase} from "../../lib/supabase";
 import {LayoutDashboard,Package,Truck,ClipboardList,Bell,Plus,Search,CheckCircle2,AlertTriangle,ArrowLeft,Menu,X} from "lucide-react";
 const seed=[
@@ -16,7 +16,50 @@ const suggestedCategory={"Incorrect supplier delivery":"Courier","Courier issue"
 const emptyForm={type:"Task",problem:"General",title:"",detail:"",owner:"",assignee:"",priority:"Medium",amount:"",supplier:"",reference:"",expected:"",received:"",dueDate:""};
 export default function Dashboard(){
 const [workspaces,setWorkspaces]=useState([]),[workspaceId,setWorkspaceId]=useState(""),[accountStatus,setAccountStatus]=useState("Checking sign-in…");
-useEffect(()=>{let active=true;let subscription;try{const db=getSupabase();async function load(){const {data:{user},error:authError}=await db.auth.getUser();if(!active)return;if(authError||!user){setWorkspaces([]);setWorkspaceId("");setAccountStatus("Sign in to choose your business workspace.");return;}const {data,error}=await db.from("memberships").select("organisation_id,role,organisations(name)");if(!active)return;if(error){setAccountStatus("Could not load workspaces: "+error.message);return;}setWorkspaces(data||[]);setWorkspaceId(old=>(data||[]).some(o=>o.organisation_id===old)?old:(data||[]).length===1?data[0].organisation_id:"");setAccountStatus((data||[]).length?"Workspace access verified. Live records are not enabled yet.":"No business workspace found.");}load().catch(e=>{if(active)setAccountStatus(e.message)});const listener=db.auth.onAuthStateChange(()=>{load().catch(()=>{})});subscription=listener.data.subscription;}catch(e){setAccountStatus(e.message)}return()=>{active=false;subscription?.unsubscribe()}},[]);
+const activeUserId=useRef(null);
+useEffect(()=>{
+ let active=true;
+ let requestId=0;
+ let subscription;
+ const clearWorkspace=()=>{setWorkspaces([]);setWorkspaceId("");};
+ try{
+  const db=getSupabase();
+  async function load(){
+   const currentRequest=++requestId;
+   const {data:{user}={},error:authError}=await db.auth.getUser();
+   if(!active||currentRequest!==requestId)return;
+   if(authError||!user){
+    activeUserId.current=null;
+    clearWorkspace();
+    setAccountStatus("Sign in to choose your business workspace.");
+    return;
+   }
+   if(activeUserId.current!==user.id){
+    activeUserId.current=user.id;
+    clearWorkspace();
+   }
+   setAccountStatus("Loading business workspaces…");
+   const {data,error}=await db.from("memberships")
+    .select("organisation_id,role,organisations(name)")
+    .eq("user_id",user.id);
+   if(!active||currentRequest!==requestId||activeUserId.current!==user.id)return;
+   if(error){
+    clearWorkspace();
+    setAccountStatus("Could not load workspaces: "+error.message);
+    return;
+   }
+   const allowed=data||[];
+   setWorkspaces(allowed);
+   setWorkspaceId(old=>allowed.some(w=>w.organisation_id===old)?old:allowed.length===1?allowed[0].organisation_id:"");
+   setAccountStatus(allowed.length?"Workspace access verified. Live records are not enabled yet.":"No business workspace found.");
+  }
+  const refresh=()=>load().catch(e=>{if(active){clearWorkspace();setAccountStatus("Could not load workspaces: "+e.message);}});
+  refresh();
+  const listener=db.auth.onAuthStateChange(()=>{activeUserId.current=null;clearWorkspace();refresh();});
+  subscription=listener.data.subscription;
+ }catch(e){clearWorkspace();setAccountStatus(e.message);}
+ return()=>{active=false;requestId++;subscription?.unsubscribe();};
+},[]);
 const [items,setItems]=useState(seed),[filter,setFilter]=useState("All"),[query,setQuery]=useState(""),[modal,setModal]=useState(false),[mobile,setMobile]=useState(false),[form,setForm]=useState(emptyForm);
 const shown=useMemo(()=>items.filter(i=>(filter==="All"||i.type===filter)&&[i.title,i.detail,i.owner,i.assignee].join(" ").toLowerCase().includes(query.toLowerCase())),[items,filter,query]);
 const count=(fn)=>items.filter(fn).length;
