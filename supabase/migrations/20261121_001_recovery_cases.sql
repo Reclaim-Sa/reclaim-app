@@ -51,11 +51,17 @@ create policy "members create recovery cases" on public.recovery_cases
   select 1 from public.memberships m where m.organisation_id=recovery_cases.organisation_id and m.user_id=recovery_cases.assigned_to
  ))
 );
--- Updates are manager-only until a server-side audited workflow is added.
--- Prevent direct browser updates to recovered amounts or other sensitive columns.
--- No UPDATE policy is intentionally granted.
+-- No direct UPDATE policy is granted, including for managers.
+-- Future updates must use an audited, authorisation-checked server workflow.
 create policy "members read recovery history" on public.recovery_case_events
  for select to authenticated using (public.is_org_member(organisation_id));
 -- No direct INSERT/UPDATE/DELETE policy for events: trusted server functions must append.
 comment on table public.recovery_cases is 'Organisation-scoped financial recovery cases; updates intentionally disabled pending audited RPC.';
 comment on table public.recovery_case_events is 'Read-only audit history; append via trusted server-side workflow only.';
+
+-- Explicit API privileges: RLS still governs every permitted read and insert.
+-- Deny anonymous access and prevent browser-side changes to recovery totals/history.
+revoke all on public.recovery_cases, public.recovery_case_events from anon;
+revoke all on public.recovery_cases, public.recovery_case_events from authenticated;
+grant select, insert on public.recovery_cases to authenticated;
+grant select on public.recovery_case_events to authenticated;
