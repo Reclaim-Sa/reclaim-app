@@ -4,3 +4,6 @@
 .rc-stat strong.rc-money{font-size:clamp(22px,2.2vw,32px);letter-spacing:-.8px;overflow-wrap:anywhere}
 
 .rc-smart-fields{display:grid;gap:12px;padding:15px;border:1px solid #dce7f5;border-radius:11px;background:#f6f9ff}.rc-smart-fields p{margin:0;font-weight:750;font-size:13px;color:#25548b}.rc-item-actions{flex-wrap:wrap;justify-content:flex-end}
+
+/* Compact, responsive issue capture */
+.rc-dialog{width:min(100%,650px);padding:24px 28px}.rc-dialog form{gap:12px}.rc-dialog-head{margin-bottom:14px}.rc-form-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.rc-dialog label{min-width:0;gap:5px}.rc-dialog input,.rc-dialog select,.rc-dialog textarea{padding:10px 12px}.rc-smart-fields{gap:10px}.rc-dialog-head h2{font-size:24px}@media(max-width:520px){.rc-form-row{grid-template-columns:1fr}.rc-dialog{padding:18px}}
