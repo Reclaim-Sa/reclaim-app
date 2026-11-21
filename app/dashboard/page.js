@@ -55,7 +55,7 @@ useEffect(()=>{
   }
   const refresh=()=>load().catch(e=>{if(active){clearWorkspace();setAccountStatus("Could not load workspaces: "+e.message);}});
   refresh();
-  const listener=db.auth.onAuthStateChange(()=>{activeUserId.current=null;clearWorkspace();refresh();});
+  const listener=db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_OUT"||event==="SIGNED_IN"||event==="USER_UPDATED"){if(event==="SIGNED_OUT"){activeUserId.current=null;clearWorkspace();}queueMicrotask(refresh);}});
   subscription=listener.data.subscription;
  }catch(e){clearWorkspace();setAccountStatus(e.message);}
  return()=>{active=false;requestId++;subscription?.unsubscribe();};
@@ -65,19 +65,19 @@ const shown=useMemo(()=>items.filter(i=>(filter==="All"||i.type===filter)&&[i.ti
 const count=(fn)=>items.filter(fn).length;
 const recovered=items.reduce((sum,i)=>sum+(Number(i.recovered)||0),0);
 const atRisk=items.filter(i=>i.status!=="Resolved").reduce((sum,i)=>sum+Math.max(0,(Number(i.amount)||0)-(Number(i.recovered)||0)),0);
-const money=n=>new Intl.NumberFormat("en-ZA",{style:"currency",currency:"ZAR",maximumFractionDigits:0}).format(n);
-function add(e){e.preventDefault();if(!form.title.trim()||!Number.isFinite(Number(form.amount))||Number(form.amount)<0)return;setItems(p=>[{...form,id:Date.now(),status:"Open",amount:Number(form.amount)||0,title:form.title.trim()},...p]);setModal(false);setForm(emptyForm);setFilter("All");}
-function done(id){setItems(p=>p.map(i=>i.id===id?{...i,status:i.status==="Resolved"?"Open":"Resolved"}:i));}
+const money=n=>new Intl.NumberFormat("en-ZA",{style:"currency",currency:"ZAR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+function add(e){e.preventDefault();if(!form.title.trim()||!Number.isFinite(Number(form.amount))||Number(form.amount)<0)return;setItems(p=>[{...form,id:Date.now(),status:"Open",amount:Math.round((Number(form.amount)||0)*100)/100,title:form.title.trim()},...p]);setModal(false);setForm(emptyForm);setFilter("All");}
+// Issue resolution is independent of confirmed cash recovery.\nfunction done(id){setItems(p=>p.map(i=>i.id===id?{...i,status:i.status==="Resolved"?"Open":"Resolved"}:i));}
 function confirmRecovery(id){
 const item=items.find(i=>i.id===id);
 if(!item||item.status==="Resolved")return;
 const outstanding=Math.max(0,(Number(item.amount)||0)-(Number(item.recovered)||0));
 if(outstanding<=0)return;
-const raw=window.prompt("Additional confirmed credit or refund received (R). Remaining: "+money(outstanding),String(outstanding));
+const raw=window.prompt("Additional confirmed credit or refund received (R). Remaining: "+money(outstanding),outstanding.toFixed(2));
 if(raw===null)return;
-const amount=Number(raw);
-if(!raw.trim()||!Number.isFinite(amount)||amount<=0||amount>outstanding){window.alert("Enter a positive amount no greater than the outstanding balance.");return;}
-setItems(p=>p.map(i=>i.id===id?{...i,recovered:(Number(i.recovered)||0)+amount,status:amount>=outstanding?"Resolved":"In progress"}:i));
+const amount=Math.round(Number(raw)*100)/100;
+if(!raw.trim()||!Number.isFinite(amount)||amount<=0||amount>outstanding+0.000001){window.alert("Enter a positive amount no greater than the outstanding balance.");return;}
+setItems(p=>p.map(i=>i.id===id?{...i,recovered:Math.round(((Number(i.recovered)||0)+amount)*100)/100,status:amount>=outstanding-0.000001?"Resolved":"In progress"}:i));
 }
 return <div className="rc-shell">
 <aside className={"rc-sidebar "+(mobile?"rc-show":"")}><div className="rc-brand">◈ <span>RECLAIM</span><button className="rc-mobile-close" onClick={()=>setMobile(false)} aria-label="Close menu"><X size={20}/></button></div><p className="rc-side-label">WORKSPACE</p><button className="rc-nav rc-active" onClick={()=>{setFilter("All");setMobile(false)}}><LayoutDashboard size={19}/> Overview</button><Link className="rc-nav" href="/stock"><Package size={19}/> Stock management</Link><Link className="rc-nav" href="/couriers"><Truck size={19}/> Courier issues</Link><Link className="rc-nav" href="/tasks"><ClipboardList size={19}/> Team tasks</Link><div className="rc-side-bottom"><div className="rc-demo-note">DEMO WORKSPACE<br/><small>Changes reset when you refresh.</small></div><a href="/"><ArrowLeft size={16}/> Back to website</a></div></aside>
