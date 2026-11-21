@@ -26,3 +26,10 @@ The public website and the stock, courier and team-task pages are **interactive 
 The migration defines organisations, memberships, stock items, stock requests, courier issues, team tasks and activity events. Row Level Security is enabled for all tables. Membership is required to read organisation data, and management roles are required for privileged updates.
 
 **Important:** The migration is not proof of a complete secure production system. A security review, integration tests and operational controls are still required.
+
+## Recovery cases migration (2026-11-21)
+A second, **not yet executed**, migration is committed at `supabase/migrations/20261121_001_recovery_cases.sql`. It must be run after the foundation migration, in a test Supabase project first.
+
+It adds `recovery_cases` and `recovery_case_events` with organisation-scoped RLS. Authenticated members can create cases and read their organisation's cases. Direct updates and audit event writes are intentionally disabled until a reviewed server-side workflow can validate status changes, record actual recoveries and append immutable events together.
+
+**This migration is not yet installed in Supabase.** The public dashboard remains a reset-on-refresh demonstration. Do not use it for real customer, supplier or patient records. Before connecting the UI, test unauthenticated access, cross-organisation isolation, member/manager roles, invalid amounts and audit-event immutability. Add an audited recovery RPC and verify it cannot be called on another organisation's cases.
